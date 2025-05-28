@@ -77,7 +77,6 @@ def extension__tts_generation_webui():
     return {
         "package_name": "extension_demucs",
         "name": "Demucs",
-        "version": "0.0.1",
         "requirements": "git+https://github.com/rsxdalv/extension_demucs@main",
         "description": "Demucs is a music source separation model that can separate drums, bass, vocals, and other instruments",
         "extension_type": "interface",
