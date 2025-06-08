@@ -25,6 +25,53 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Extract version from setup.py
+        id: get_version
+        run: |
+          if [ -f setup.py ]; then
+            # Extract version from setup.py using multiple methods
+            VERSION=$(python -c "
+            import ast
+            import re
+            
+            # Try to extract version from setup.py
+            with open('setup.py', 'r') as f:
+                content = f.read()
+            
+            # Method 1: Look for version= in setup() call
+            version_match = re.search(r'version\s*=\s*[\'\"](.*?)[\'\"]', content)
+            if version_match:
+                print(version_match.group(1))
+            else:
+                # Method 2: Look for __version__ variable
+                version_match = re.search(r'__version__\s*=\s*[\'\"](.*?)[\'\"]', content)
+                if version_match:
+                    print(version_match.group(1))
+                else:
+                    # Method 3: Try to execute setup.py and extract
+                    try:
+                        tree = ast.parse(content)
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.Call) and hasattr(node.func, 'id') and node.func.id == 'setup':
+                                for keyword in node.keywords:
+                                    if keyword.arg == 'version':
+                                        if isinstance(keyword.value, ast.Str):
+                                            print(keyword.value.s)
+                                        elif isinstance(keyword.value, ast.Constant):
+                                            print(keyword.value.value)
+                                        break
+                    except:
+                        print('0.0.0')  # fallback version
+            ")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+            echo "Found version: $VERSION"
+          else
+            echo "setup.py not found, using fallback"
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install old pip
         run: python -m pip install --upgrade pip==23.3.2
       - name: Install Deps
@@ -45,15 +92,35 @@ jobs:
         
       - name: Get the tag version
         id: extract_branch
-        run: echo ::set-output name=branch::${GITHUB_REF#refs/tags/}
+        run: |
+          if [ "${{ github.event_name }}" == "create" ]; then
+            # If triggered by tag creation, use the tag
+            echo "branch=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            # If manually triggered, use version from setup.py
+            echo "branch=${{ steps.get_version.outputs.tag }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Get Release with tag
-        id: get_current_release
-        uses: joutvhu/get-release@v1
-        with:
-          tag_name: ${{ steps.extract_branch.outputs.branch }}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.extract_branch.outputs.branch }}
+          release_name: Release ${{ steps.extract_branch.outputs.branch }}
+          body: |
+            Automated release for version ${{ steps.get_version.outputs.version }}
+            
+            ## Changes
+            - Built wheel: ${{ env.wheel_name }}
+            
+            ## Installation
+            ```bash
+            pip install <wheel-name>
+            ```
+          draft: false
+          prerelease: false
 
       - name: Upload Release Asset
         id: upload_release_asset
@@ -61,7 +128,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.get_current_release.outputs.upload_url }}
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./dist/${{env.wheel_name}}
           asset_name: ${{env.wheel_name}}
-          asset_content_type: application/*
+          asset_content_type: application/octet-stream
