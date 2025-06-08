@@ -28,34 +28,7 @@ jobs:
         id: get_version
         run: |
           if [ -f setup.py ]; then
-            cat > extract_version.py << 'EOF'
-import ast
-import re
-with open('setup.py', 'r') as f:
-    content = f.read()
-version_match = re.search(r'version\s*=\s*[\'\"](.*?)[\'\"]', content)
-if version_match:
-    print(version_match.group(1))
-else:
-    version_match = re.search(r'__version__\s*=\s*[\'\"](.*?)[\'\"]', content)
-    if version_match:
-        print(version_match.group(1))
-    else:
-        try:
-            tree = ast.parse(content)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Call) and hasattr(node.func, 'id') and node.func.id == 'setup':
-                    for keyword in node.keywords:
-                        if keyword.arg == 'version':
-                            if isinstance(keyword.value, ast.Str):
-                                print(keyword.value.s)
-                            elif isinstance(keyword.value, ast.Constant):
-                                print(keyword.value.value)
-                            break
-        except:
-            print('0.0.0')
-EOF
-            VERSION=$(python3 extract_version.py)
+            VERSION=$(python3 -c "import re; content=open('setup.py').read(); match=re.search(r'version\s*=\s*[\'\"](.*?)[\'\"]', content); print(match.group(1) if match else '0.0.0')")
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "tag=v$VERSION" >> $GITHUB_OUTPUT
             echo "Found version: $VERSION"
