@@ -28,7 +28,7 @@ jobs:
         id: get_version
         run: |
           if [ -f setup.py ]; then
-            VERSION=$(python3 -c "
+            cat > extract_version.py << 'EOF'
 import ast
 import re
 with open('setup.py', 'r') as f:
@@ -54,7 +54,8 @@ else:
                             break
         except:
             print('0.0.0')
-")
+EOF
+            VERSION=$(python3 extract_version.py)
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "tag=v$VERSION" >> $GITHUB_OUTPUT
             echo "Found version: $VERSION"
