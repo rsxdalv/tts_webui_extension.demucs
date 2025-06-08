@@ -26,27 +26,17 @@ jobs:
 
       - name: Extract version from setup.py
         id: get_version
-        run: |
-          if [ -f setup.py ]; then
-            VERSION=$(python3 -c "import re; content=open('setup.py').read(); match=re.search(r'version\s*=\s*[\'\"](.*?)[\'\"]', content); print(match.group(1) if match else '0.0.0')")
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-            echo "Found version: $VERSION"
-          else
-            echo "setup.py not found, using fallback"
-            echo "version=0.0.0" >> $GITHUB_OUTPUT
-            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
-          fi
+        uses: rsxdalv/extract-python-version@v1
+        with:
+          file-path: 'setup.py'
+          fallback-version: '0.0.0'
 
       - name: Check if version changed
         id: version_check
         run: |
-          # Get current version from setup.py
           CURRENT_VERSION="${{ steps.get_version.outputs.version }}"
-          
-          # Check if tag already exists
-          if git rev-parse "v$CURRENT_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$CURRENT_VERSION already exists, skipping release"
+          if git rev-parse "${{ steps.get_version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.get_version.outputs.tag }} already exists, skipping release"
             echo "should_release=false" >> $GITHUB_OUTPUT
           else
             echo "New version detected: $CURRENT_VERSION"
