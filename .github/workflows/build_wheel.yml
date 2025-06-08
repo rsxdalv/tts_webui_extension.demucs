@@ -18,6 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper tag checking
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -31,12 +33,28 @@ jobs:
           file-path: 'setup.py'
           fallback-version: '0.0.0'
 
-      - name: Check if version changed
+      - name: Debug all outputs before version check
+        run: |
+          echo "=== Debug Information ==="
+          echo "get_version.outputs.version: '${{ steps.get_version.outputs.version }}'"
+          echo "get_version.outputs.tag: '${{ steps.get_version.outputs.tag }}'"
+          echo "Length of version: ${#{{ steps.get_version.outputs.version }}}"
+          echo "Length of tag: ${#{{ steps.get_version.outputs.tag }}}"
+          if [ -z "${{ steps.get_version.outputs.version }}" ]; then
+            echo "ERROR: Version is empty!"
+          fi
+          if [ -z "${{ steps.get_version.outputs.tag }}" ]; then
+            echo "ERROR: Tag is empty!"
+          fi
         id: version_check
         run: |
           CURRENT_VERSION="${{ steps.get_version.outputs.version }}"
-          if git rev-parse "${{ steps.get_version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "Tag ${{ steps.get_version.outputs.tag }} already exists, skipping release"
+          TAG_NAME="${{ steps.get_version.outputs.tag }}"
+          
+          echo "Checking for existing tag: $TAG_NAME"
+          
+          if git tag -l | grep -q "^$TAG_NAME$"; then
+            echo "Tag $TAG_NAME already exists, skipping release"
             echo "should_release=false" >> $GITHUB_OUTPUT
           else
             echo "New version detected: $CURRENT_VERSION"
@@ -67,20 +85,29 @@ jobs:
         if: steps.version_check.outputs.should_release == 'true'
         run: echo "wheel_name=$(basename dist/*.whl)" >> $GITHUB_ENV
 
-      - name: Get the tag version
+      - name: Debug version outputs before create release
         if: steps.version_check.outputs.should_release == 'true'
-        id: extract_branch
-        run: echo "branch=${{ steps.get_version.outputs.tag }}" >> $GITHUB_OUTPUT
+        run: |
+          echo "=== Pre-Release Debug ==="
+          echo "Version: '${{ steps.get_version.outputs.version }}'"
+          echo "Tag: '${{ steps.get_version.outputs.tag }}'"
+          echo "Should release: '${{ steps.version_check.outputs.should_release }}'"
+          echo "Wheel name: '${{ env.wheel_name }}'"
+          # Test if the tag variable is accessible
+          if [ -z "${{ steps.get_version.outputs.tag }}" ]; then
+            echo "CRITICAL ERROR: Tag is empty at release time!"
+            exit 1
+          fi
 
       - name: Create Release
         if: steps.version_check.outputs.should_release == 'true'
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.get_version.outputs.tag }}
-          release_name: Release ${{ steps.get_version.outputs.version }}
+          tag_name: ${{ steps.get_version.outputs.tag || format('v{0}', steps.get_version.outputs.version) }}
+          name: Release ${{ steps.get_version.outputs.version }}
           body: |
             Automated release for version ${{ steps.get_version.outputs.version }}
             
@@ -89,19 +116,8 @@ jobs:
             
             ## Installation
             ```bash
-            pip install <wheel-name>
+            pip install ${{ env.wheel_name }}
             ```
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        if: steps.version_check.outputs.should_release == 'true'
-        id: upload_release_asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/${{env.wheel_name}}
-          asset_name: ${{env.wheel_name}}
-          asset_content_type: application/octet-stream
+          files: ./dist/*.whl
