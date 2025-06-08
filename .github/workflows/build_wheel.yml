@@ -28,7 +28,7 @@ jobs:
 
       - name: Extract version from setup.py
         id: get_version
-        uses: rsxdalv/extract-python-version@v1
+        uses: rsxdalv/extract-python-version@v2
         with:
           file-path: 'setup.py'
           fallback-version: '0.0.0'
