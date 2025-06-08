@@ -28,26 +28,19 @@ jobs:
         id: get_version
         run: |
           if [ -f setup.py ]; then
-            # Extract version from setup.py using multiple methods
-            VERSION=$(python -c "
+            VERSION=$(python3 -c "
 import ast
 import re
-
-# Try to extract version from setup.py
 with open('setup.py', 'r') as f:
     content = f.read()
-
-# Method 1: Look for version= in setup() call
 version_match = re.search(r'version\s*=\s*[\'\"](.*?)[\'\"]', content)
 if version_match:
     print(version_match.group(1))
 else:
-    # Method 2: Look for __version__ variable
     version_match = re.search(r'__version__\s*=\s*[\'\"](.*?)[\'\"]', content)
     if version_match:
         print(version_match.group(1))
     else:
-        # Method 3: Try to execute setup.py and extract
         try:
             tree = ast.parse(content)
             for node in ast.walk(tree):
@@ -60,7 +53,7 @@ else:
                                 print(keyword.value.value)
                             break
         except:
-            print('0.0.0')  # fallback version
+            print('0.0.0')
 ")
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "tag=v$VERSION" >> $GITHUB_OUTPUT
