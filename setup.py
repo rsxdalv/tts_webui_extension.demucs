@@ -3,7 +3,7 @@ import setuptools
 setuptools.setup(
     name="extension_demucs",
     packages=setuptools.find_namespace_packages(),
-    version="0.0.1",
+    version="0.0.2",
     author="rsxdalv",
     description="Demucs is a music source separation model that can separate drums, bass, vocals, and other instruments",
     url="https://github.com/rsxdalv/extension_demucs",
